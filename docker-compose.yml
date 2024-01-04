@@ -1,63 +1,73 @@
-version: '2.3'
+version: '2.4'
 
 services:
   redis:
     restart: always
     image: redis:6.2.6
     command:
-    - --loglevel warning
+      - --loglevel warning
     volumes:
-    - redis-data:/data:Z
+      - redis-data:/data
 
   postgresql:
     restart: always
-    image: sameersbn/postgresql:12-20200524
+    image: postgres:15.5
     volumes:
-    - postgresql-data:/var/lib/postgresql:Z
+      - postgresql-data:/var/lib/postgresql
     environment:
-    - DB_USER=${DB_USER}
-    - DB_PASS=${DB_PASSWORD}
-    - DB_NAME=gitlabhq_production
-    - DB_EXTENSION=pg_trgm,btree_gist
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=gitlabhq_production
+      - DB_EXTENSION=pg_trgm,btree_gist
 
   registry:
     restart: always
     image: registry:2.4.1
     ports:
-    - "${REGISTRY_PORT}:5000"
+      - "${REGISTRY_PORT}:5000"
     volumes:
-    - /srv/docker/gitlab/gitlab/shared/registry:/registry
-    - /srv/docker/gitlab/certs:/certs
+      - type: bind
+        source: /srv/docker/gitlab/gitlab/shared/registry
+        target: /registry
+      - type: bind
+        source: /srv/docker/gitlab/certs
+        target: /certs
     environment:
-    - REGISTRY_LOG_LEVEL=info
-    - REGISTRY_AUTH_TOKEN_REALM=https://${GITLAB_HOST}:${HTTPS_PORT}/jwt/auth
-    - REGISTRY_AUTH_TOKEN_SERVICE=container_registry
-    - REGISTRY_AUTH_TOKEN_ISSUER=gitlab-issuer
-    - REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE=/certs/auth.crt
-
-    - REGISTRY_HTTP_SECRET=${HTTP_SECRET}
-    - REGISTRY_HTTP_TLS_CERTIFICATE=/certs/auth.crt
-    - REGISTRY_HTTP_TLS_KEY=/certs/auth.key
-
-    - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/registry
-    - REGISTRY_STORAGE_DELETE_ENABLED=true
+      - REGISTRY_LOG_LEVEL=info
+      - REGISTRY_AUTH_TOKEN_REALM=https://${GITLAB_HOST}:${HTTPS_PORT}/jwt/auth
+      - REGISTRY_AUTH_TOKEN_SERVICE=container_registry
+      - REGISTRY_AUTH_TOKEN_ISSUER=gitlab-issuer
+      - REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE=/certs/auth.crt
+      - REGISTRY_HTTP_SECRET=${HTTP_SECRET}
+      - REGISTRY_HTTP_TLS_CERTIFICATE=/certs/auth.crt
+      - REGISTRY_HTTP_TLS_KEY=/certs/auth.key
+      - REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY=/registry
+      - REGISTRY_STORAGE_DELETE_ENABLED=true
 
   gitlab:
     restart: always
-    image: sameersbn/gitlab:14.10.3
+    image: sameersbn/gitlab:16.7.0
     depends_on:
-    - redis
-    - postgresql
+      - redis
+      - postgresql
     ports:
-    - "80:80"
-    - "${HTTPS_PORT}:443"
-    - "${SSH_PORT}:22"
+      - "80:80"
+      - "${HTTPS_PORT}:443"
+      - "${SSH_PORT}:22"
     volumes:
-    - gitlab-data:/home/git/data:Z
-    - /srv/docker/gitlab/logs:/var/log/gitlab
-    - /srv/docker/gitlab/certs:/certs
-    - /srv/docker/gitlab/certs/ca.crt:/etc/ssl/certs/ca.crt
-    - ~/gitlab/assets/runtime/config/nginx/gitlab-registry:/etc/docker-gitlab/runtime/config/nginx/gitlab-registry
+      - gitlab-data:/home/git/data
+      - type: bind
+        source: /srv/docker/gitlab/logs
+        target: /var/log/gitlab
+      - type: bind
+        source: /srv/docker/gitlab/certs
+        target: /certs
+      - type: bind
+        source: /srv/docker/gitlab/certs/ca.crt
+        target: /etc/ssl/certs/ca.crt
+      - type: bind
+        source: ~/gitlab/assets/runtime/config/nginx/gitlab-registry
+        target: /etc/docker-gitlab/runtime/config/nginx/gitlab-registry
     healthcheck:
       test: ["CMD", "/usr/local/sbin/healthcheck"]
       interval: 5m
@@ -65,145 +75,129 @@ services:
       retries: 3
       start_period: 5m
     environment:
-    - GITLAB_REGISTRY_ENABLED=true
-    - GITLAB_REGISTRY_HOST=${REGISTRY_HOST}
-    - GITLAB_REGISTRY_PORT=${REGISTRY_PORT}
-    - GITLAB_REGISTRY_API_URL=https://${REGISTRY_HOST}:${REGISTRY_PORT}
-    - GITLAB_REGISTRY_ISSUER=gitlab-issuer
+      - GITLAB_REGISTRY_ENABLED=true
+      - GITLAB_REGISTRY_HOST=${REGISTRY_HOST}
+      - GITLAB_REGISTRY_PORT=${REGISTRY_PORT}
+      - GITLAB_REGISTRY_API_URL=https://${REGISTRY_HOST}:${REGISTRY_PORT}
+      - GITLAB_REGISTRY_ISSUER=gitlab-issuer
+      - GITLAB_HTTPS=true
+      - SSL_SELF_SIGNED=true
+      - SSL_KEY_PATH=/certs/auth.key
+      - SSL_CERTIFICATE_PATH=/certs/auth.crt
+      - SSL_DHPARAM_PATH=/certs/dhparam.pem
+      - GITLAB_REGISTRY_CERT_PATH=/certs/auth.crt
+      - GITLAB_REGISTRY_KEY_PATH=/certs/auth.key
+      - SSL_REGISTRY_KEY_PATH=/certs/auth.key
+      - SSL_REGISTRY_CERT_PATH=/certs/auth.crt
+      - DEBUG=false
+      - DB_ADAPTER=postgresql
+      - DB_HOST=postgresql
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASSWORD}
+      - DB_NAME=gitlabhq_production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - TZ=UTC
+      - GITLAB_TIMEZONE=UTC
+      - GITLAB_HOST=${GITLAB_HOST}
+      - GITLAB_PORT=${HTTPS_PORT}
+      - GITLAB_SSH_PORT=${SSH_PORT}
+      - GITLAB_RELATIVE_URL_ROOT=
+      - GITLAB_SECRETS_DB_KEY_BASE=${GITLAB_SECRETS_BASE}
+      - GITLAB_SECRETS_SECRET_KEY_BASE=${GITLAB_SECRETS_BASE}
+      - GITLAB_SECRETS_OTP_KEY_BASE=${GITLAB_SECRETS_BASE}
+      - GITLAB_SHARED_RUNNERS_REGISTRATION_TOKEN=${RUNNER_TOKEN}
+      - GITLAB_ROOT_PASSWORD=${ROOT_PASSWORD}
+      - GITLAB_ROOT_EMAIL=${USER_EMAIL}
+      - GITLAB_NOTIFY_ON_BROKEN_BUILDS=true
+      - GITLAB_NOTIFY_PUSHER=false
+      - GITLAB_EMAIL=${USER_EMAIL}
+      - GITLAB_EMAIL_REPLY_TO=${USER_EMAIL}
+      - GITLAB_INCOMING_EMAIL_ADDRESS=${USER_EMAIL}
+      - GITLAB_BACKUP_SCHEDULE=daily
+      - GITLAB_BACKUP_TIME=01:00
 
-    - GITLAB_HTTPS=true
-    - SSL_SELF_SIGNED=true
+      - SMTP_ENABLED=false
+      - SMTP_DOMAIN=www.example.com
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USER=mailer@example.com
+      - SMTP_PASS=password
+      - SMTP_STARTTLS=true
+      - SMTP_AUTHENTICATION=login
 
-    - SSL_KEY_PATH=/certs/auth.key
-    - SSL_CERTIFICATE_PATH=/certs/auth.crt
-    - SSL_DHPARAM_PATH=/certs/dhparam.pem
+      - IMAP_ENABLED=false
+      - IMAP_HOST=imap.gmail.com
+      - IMAP_PORT=993
+      - IMAP_USER=mailer@example.com
+      - IMAP_PASS=password
+      - IMAP_SSL=true
+      - IMAP_STARTTLS=false
 
-    - GITLAB_REGISTRY_CERT_PATH=/certs/auth.crt
-    - GITLAB_REGISTRY_KEY_PATH=/certs/auth.key
+      - OAUTH_ENABLED=false
+      - OAUTH_AUTO_SIGN_IN_WITH_PROVIDER=
+      - OAUTH_ALLOW_SSO=
+      - OAUTH_BLOCK_AUTO_CREATED_USERS=true
+      - OAUTH_AUTO_LINK_LDAP_USER=false
+      - OAUTH_AUTO_LINK_SAML_USER=false
+      - OAUTH_EXTERNAL_PROVIDERS=
 
-    - SSL_REGISTRY_KEY_PATH=/certs/auth.key
-    - SSL_REGISTRY_CERT_PATH=/certs/auth.crt
+      - OAUTH_CAS3_LABEL=cas3
+      - OAUTH_CAS3_SERVER=
+      - OAUTH_CAS3_DISABLE_SSL_VERIFICATION=false
+      - OAUTH_CAS3_LOGIN_URL=/cas/login
+      - OAUTH_CAS3_VALIDATE_URL=/cas/p3/serviceValidate
+      - OAUTH_CAS3_LOGOUT_URL=/cas/logout
 
-    - DEBUG=false
+      - OAUTH_GOOGLE_API_KEY=
+      - OAUTH_GOOGLE_APP_SECRET=
+      - OAUTH_GOOGLE_RESTRICT_DOMAIN=
 
-    - DB_ADAPTER=postgresql
-    - DB_HOST=postgresql
-    - DB_PORT=5432
-    - DB_USER=${DB_USER}
-    - DB_PASS=${DB_PASSWORD}
-    - DB_NAME=gitlabhq_production
+      - OAUTH_FACEBOOK_API_KEY=
+      - OAUTH_FACEBOOK_APP_SECRET=
 
-    - REDIS_HOST=redis
-    - REDIS_PORT=6379
+      - OAUTH_TWITTER_API_KEY=
+      - OAUTH_TWITTER_APP_SECRET=
 
-    - TZ=UTC
-    - GITLAB_TIMEZONE=UTC
+      - OAUTH_GITHUB_API_KEY=
+      - OAUTH_GITHUB_APP_SECRET=
+      - OAUTH_GITHUB_URL=
+      - OAUTH_GITHUB_VERIFY_SSL=
 
-    - GITLAB_HOST=${GITLAB_HOST}
-    - GITLAB_PORT=${HTTPS_PORT}
+      - OAUTH_GITLAB_API_KEY=
+      - OAUTH_GITLAB_APP_SECRET=
 
-    - GITLAB_SSH_PORT=${SSH_PORT}
-    - GITLAB_RELATIVE_URL_ROOT=
+      - OAUTH_BITBUCKET_API_KEY=
+      - OAUTH_BITBUCKET_APP_SECRET=
+      - OAUTH_BITBUCKET_URL=
 
-    - GITLAB_SECRETS_DB_KEY_BASE=${GITLAB_SECRETS_BASE}
-    - GITLAB_SECRETS_SECRET_KEY_BASE=${GITLAB_SECRETS_BASE}
-    - GITLAB_SECRETS_OTP_KEY_BASE=${GITLAB_SECRETS_BASE}
+      - OAUTH_SAML_ASSERTION_CONSUMER_SERVICE_URL=
+      - OAUTH_SAML_IDP_CERT_FINGERPRINT=
+      - OAUTH_SAML_IDP_SSO_TARGET_URL=
+      - OAUTH_SAML_ISSUER=
+      - OAUTH_SAML_LABEL="Our SAML Provider"
+      - OAUTH_SAML_NAME_IDENTIFIER_FORMAT=urn:oasis:names:tc:SAML:2.0:nameid-format:transient
+      - OAUTH_SAML_GROUPS_ATTRIBUTE=
+      - OAUTH_SAML_EXTERNAL_GROUPS=
+      - OAUTH_SAML_ATTRIBUTE_STATEMENTS_EMAIL=
+      - OAUTH_SAML_ATTRIBUTE_STATEMENTS_NAME=
+      - OAUTH_SAML_ATTRIBUTE_STATEMENTS_USERNAME=
+      - OAUTH_SAML_ATTRIBUTE_STATEMENTS_FIRST_NAME=
+      - OAUTH_SAML_ATTRIBUTE_STATEMENTS_LAST_NAME=
 
-    - GITLAB_SHARED_RUNNERS_REGISTRATION_TOKEN=${RUNNER_TOKEN}
-    - GITLAB_ROOT_PASSWORD=${ROOT_PASSWORD}
+      - OAUTH_CROWD_SERVER_URL=
+      - OAUTH_CROWD_APP_NAME=
+      - OAUTH_CROWD_APP_PASSWORD=
 
-    - GITLAB_ROOT_EMAIL=${USER_EMAIL}
+      - OAUTH_AUTH0_CLIENT_ID=
+      - OAUTH_AUTH0_CLIENT_SECRET=
+      - OAUTH_AUTH0_DOMAIN=
+      - OAUTH_AUTH0_SCOPE=
 
-    - GITLAB_NOTIFY_ON_BROKEN_BUILDS=true
-    - GITLAB_NOTIFY_PUSHER=false
-
-    - GITLAB_EMAIL=${USER_EMAIL}
-    - GITLAB_EMAIL_REPLY_TO=${USER_EMAIL}
-    - GITLAB_INCOMING_EMAIL_ADDRESS=${USER_EMAIL}
-
-    - GITLAB_BACKUP_SCHEDULE=daily
-    - GITLAB_BACKUP_TIME=01:00
-
-    - SMTP_ENABLED=false
-    - SMTP_DOMAIN=www.example.com
-    - SMTP_HOST=smtp.gmail.com
-    - SMTP_PORT=587
-    - SMTP_USER=mailer@example.com
-    - SMTP_PASS=password
-    - SMTP_STARTTLS=true
-    - SMTP_AUTHENTICATION=login
-
-    - IMAP_ENABLED=false
-    - IMAP_HOST=imap.gmail.com
-    - IMAP_PORT=993
-    - IMAP_USER=mailer@example.com
-    - IMAP_PASS=password
-    - IMAP_SSL=true
-    - IMAP_STARTTLS=false
-
-    - OAUTH_ENABLED=false
-    - OAUTH_AUTO_SIGN_IN_WITH_PROVIDER=
-    - OAUTH_ALLOW_SSO=
-    - OAUTH_BLOCK_AUTO_CREATED_USERS=true
-    - OAUTH_AUTO_LINK_LDAP_USER=false
-    - OAUTH_AUTO_LINK_SAML_USER=false
-    - OAUTH_EXTERNAL_PROVIDERS=
-
-    - OAUTH_CAS3_LABEL=cas3
-    - OAUTH_CAS3_SERVER=
-    - OAUTH_CAS3_DISABLE_SSL_VERIFICATION=false
-    - OAUTH_CAS3_LOGIN_URL=/cas/login
-    - OAUTH_CAS3_VALIDATE_URL=/cas/p3/serviceValidate
-    - OAUTH_CAS3_LOGOUT_URL=/cas/logout
-
-    - OAUTH_GOOGLE_API_KEY=
-    - OAUTH_GOOGLE_APP_SECRET=
-    - OAUTH_GOOGLE_RESTRICT_DOMAIN=
-
-    - OAUTH_FACEBOOK_API_KEY=
-    - OAUTH_FACEBOOK_APP_SECRET=
-
-    - OAUTH_TWITTER_API_KEY=
-    - OAUTH_TWITTER_APP_SECRET=
-
-    - OAUTH_GITHUB_API_KEY=
-    - OAUTH_GITHUB_APP_SECRET=
-    - OAUTH_GITHUB_URL=
-    - OAUTH_GITHUB_VERIFY_SSL=
-
-    - OAUTH_GITLAB_API_KEY=
-    - OAUTH_GITLAB_APP_SECRET=
-
-    - OAUTH_BITBUCKET_API_KEY=
-    - OAUTH_BITBUCKET_APP_SECRET=
-    - OAUTH_BITBUCKET_URL=
-
-    - OAUTH_SAML_ASSERTION_CONSUMER_SERVICE_URL=
-    - OAUTH_SAML_IDP_CERT_FINGERPRINT=
-    - OAUTH_SAML_IDP_SSO_TARGET_URL=
-    - OAUTH_SAML_ISSUER=
-    - OAUTH_SAML_LABEL="Our SAML Provider"
-    - OAUTH_SAML_NAME_IDENTIFIER_FORMAT=urn:oasis:names:tc:SAML:2.0:nameid-format:transient
-    - OAUTH_SAML_GROUPS_ATTRIBUTE=
-    - OAUTH_SAML_EXTERNAL_GROUPS=
-    - OAUTH_SAML_ATTRIBUTE_STATEMENTS_EMAIL=
-    - OAUTH_SAML_ATTRIBUTE_STATEMENTS_NAME=
-    - OAUTH_SAML_ATTRIBUTE_STATEMENTS_USERNAME=
-    - OAUTH_SAML_ATTRIBUTE_STATEMENTS_FIRST_NAME=
-    - OAUTH_SAML_ATTRIBUTE_STATEMENTS_LAST_NAME=
-
-    - OAUTH_CROWD_SERVER_URL=
-    - OAUTH_CROWD_APP_NAME=
-    - OAUTH_CROWD_APP_PASSWORD=
-
-    - OAUTH_AUTH0_CLIENT_ID=
-    - OAUTH_AUTH0_CLIENT_SECRET=
-    - OAUTH_AUTH0_DOMAIN=
-    - OAUTH_AUTH0_SCOPE=
-
-    - OAUTH_AZURE_API_KEY=
-    - OAUTH_AZURE_API_SECRET=
-    - OAUTH_AZURE_TENANT_ID=
+      - OAUTH_AZURE_API_KEY=
+      - OAUTH_AZURE_API_SECRET=
+      - OAUTH_AZURE_TENANT_ID=
 
 volumes:
   redis-data:
